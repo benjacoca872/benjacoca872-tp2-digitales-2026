@@ -32,15 +32,15 @@ uint16_t estadoBotonesAnterior = 0;
 
 #define PIN_ENC_A PC1  // CLK en Pin A1 //
 #define PIN_ENC_B PC2  // DT en Pin A2 //
-#define PIN_ENC_SW PC3 // SW en Pin A3 (Pulsador Encoder: START / STOP) //
+#define PIN_ENC_SW PC3 // SW en Pin A3 //
 uint8_t encA_ant = 0;
 
-// CONFIGURACIÓN DE LA COLA CIRCULAR (RAM VACÍA AL ARRANCAR) //
+// CONFIGURACIÓN DE LA RAM //
 #define CANT_MAX 10
 uint16_t tiemposGuardados[CANT_MAX] = {}; // Vector completamente vacío en RAM //
 uint8_t indexGuardar = 0;  // Empieza a guardar desde la posición 0 //
 uint8_t indexLeer = 0;     // Puntero de lectura inicial //
-uint8_t cantidadElementos = 0; // Al conectar el Arduino, hay 0 elementos guardados //
+uint8_t cantidadElementos = 0; // Al conectarlo hay 0 elementos guardados //
 
 #define PIN_ALERTA PB5 
 
@@ -53,17 +53,17 @@ void procesarEncoder();
 void guardarEnCola(uint16_t valor);
 void leerSiguienteCola();
 
-ISR(TIMER0_COMPA_vect) { 
+ISR(TIMER0_COMPA_vect) { // ctc //
   contador_ms++; 
 }
 
-ISR(ADC_vect) {
+ISR(ADC_vect) { //auto triger//
   static uint32_t acum = 0;
   static uint8_t i = 0;
   acum += ADC;
   i++;
   if (i > 15) {
-    valorAdc = acum >> 4;
+    valorAdc = acum >> 4; // buscar porque lo hago de 4 en 4//
     acum = 0;
     i = 0;
   }
@@ -116,14 +116,12 @@ void mostrarDisplay(uint8_t numDisplay, uint8_t dato) {
 void guardarEnCola(uint16_t valor) {
   tiemposGuardados[indexGuardar] = valor;
   indexGuardar = (indexGuardar + 1) % CANT_MAX; // Si pasa de 10, vuelve a 0  //
-  if (cantidadElementos < CANT_MAX) {
     cantidadElementos++;
   }
-}
 
 // BOTÓN 2: MUESTRA EL SIGUIENTE VALOR GUARDADO EN MEMORIA //
 void leerSiguienteCola() {
-  if (cantidadElementos == 0) return; // Si no guardaste nada, no hace nada //
+  if (cantidadElementos == 0) return; 
   
   // Carga el dato guardado en la pantalla //
   tiempoRegresivo = tiemposGuardados[indexLeer];
@@ -139,7 +137,7 @@ void procesarEncoder() {
   uint8_t encA_actual = (PINC & (1 << PIN_ENC_A)) ? 1 : 0;
   uint8_t encB_actual = (PINC & (1 << PIN_ENC_B)) ? 1 : 0;
 
-  // Determinar el paso según el modo activo (Minutos = 60s, Segundos = 1s) //
+  // (Minutos = 60s, Segundos = 1s) //
   uint16_t paso = (modoActual == MINUTOS) ? 60 : 1;
 
   if (encA_actual != encA_ant) { 
@@ -183,11 +181,11 @@ int main() {
     // LECTURA DE BOTONES //
     uint16_t botonActual = 0; 
     
-    // Pulsador físico en el eje del Encoder (Pin A3 digital) //
+    // Pulsador del Encoder //
     if ((PINC & (1 << PIN_ENC_SW)) == 0) {
       botonActual = 1; // START / STOP //
     } 
-    // Botonera analógica en Pin A0
+    
     else if (valorAdc >= 200 && valorAdc <= 270) {
       botonActual = 2; // BOTÓN 1: Almacenar valor del display en RAM //
     } 
@@ -206,7 +204,6 @@ int main() {
     else if ((contador_ms - tiempoEstabilizacion > 50) && (botonActual != estadoBotonesAnterior)) {
       if (botonActual != 0) {
         
-        // CORRECCIÓN: Separamos las acciones de los botones 1 y 4 independientes uno del otro
         if (botonActual == 1) // START / STOP //
         {
           if (estadoActual == CONFIG && tiempoRegresivo > 0) {
@@ -224,7 +221,7 @@ int main() {
             modoActual = MINUTOS;
           }
         }
-        else if (estadoActual == CONFIG) { // Acciones de memoria (solo en pausa) //
+        else if (estadoActual == CONFIG) { // guarda el ultimo numero mostrado en el display con una memoria //
           if (botonActual == 2) {
             guardarEnCola(tiempoRegresivo); 
           } 
@@ -240,7 +237,7 @@ int main() {
     if (estadoActual == CORRIENDO) {
       if (contador_ms - ultimoTick >= 1000) {
         ultimoTick = contador_ms;
-        if (tiempoRegresivo > 0)
+        if (tiempoRegresivo > 1)
           tiempoRegresivo--;
         else {
           estadoActual = FINAL;
